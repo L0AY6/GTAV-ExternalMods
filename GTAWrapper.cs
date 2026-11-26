@@ -46,13 +46,21 @@ namespace GTA.Native
 
     public class InputArgument
     {
+        private static readonly IntPtr _strBuf = Marshal.AllocHGlobal(512);
         public ulong Value { get; }
         public InputArgument(ulong val) { Value = val; }
         public InputArgument(int val) { Value = (ulong)val; }
         public InputArgument(uint val) { Value = val; }
         public InputArgument(bool val) { Value = val ? 1UL : 0UL; }
         public unsafe InputArgument(float val) { Value = *(uint*)&val; }
-        public InputArgument(string val) { Value = (ulong)Marshal.StringToHGlobalAnsi(val); }
+        public unsafe InputArgument(string val)
+        {
+            byte[] bytes = System.Text.Encoding.ASCII.GetBytes(val ?? "");
+            int len = Math.Min(bytes.Length, 510);
+            Marshal.Copy(bytes, 0, _strBuf, len);
+            ((byte*)_strBuf)[len] = 0;
+            Value = (ulong)_strBuf;
+        }
         public static implicit operator InputArgument(int v) => new InputArgument(v);
         public static implicit operator InputArgument(uint v) => new InputArgument(v);
         public static implicit operator InputArgument(ulong v) => new InputArgument(v);
@@ -117,7 +125,7 @@ namespace GTA
     public enum VehicleClass { Compacts = 0, Sedans = 1, SUVs = 2, Coupes = 3, Muscle = 4, SportsClassics = 5, Sports = 6, Super = 7, Motorcycles = 8, OffRoad = 9, Industrial = 10, Utility = 11, Vans = 12, Cycles = 13, Boats = 14, Helicopters = 15, Planes = 16, Service = 17, Emergency = 18, Military = 19, Commercial = 20, Trains = 21 }
     public struct Model { public int Hash { get; } public Model(int hash) { Hash = hash; } }
 
-        public class HandlingParam
+    public class HandlingParam
     {
         public string Name { get; set; }
         public string Label { get; set; }
@@ -136,8 +144,9 @@ namespace GTA
     {
         private readonly IntPtr _ptr;
         public HandlingData(IntPtr ptr) { _ptr = ptr; }
-        private float R(int o) => _ptr != IntPtr.Zero ? *(float*)(_ptr + o) : 0f;
-        private void W(int o, float v) { if (_ptr != IntPtr.Zero) *(float*)(_ptr + o) = v; }
+        public bool IsValid => (ulong)_ptr > 0x10000 && (ulong)_ptr < 0x7FFFFFFFFFFF;
+        private float R(int o) => IsValid ? *(float*)(_ptr + o) : 0f;
+        private void W(int o, float v) { if (IsValid && !float.IsNaN(v) && !float.IsInfinity(v)) *(float*)(_ptr + o) = v; }
         public float Mass { get => R(0x0C); set => W(0x0C, value); }
         public Vector3 InertiaMultiplier { get => new Vector3(R(0x30), R(0x34), R(0x38)); set { W(0x30, value.X); W(0x34, value.Y); W(0x38, value.Z); } }
         public float SuspensionForce { get => R(0xBC); set => W(0xBC, value); }
@@ -160,15 +169,29 @@ namespace GTA
         public VehicleClass ClassType => (VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS, Handle);
         public string DisplayName => Function.Call<string>(Hash.GET_DISPLAY_NAME_FROM_VEHICLE_MODEL, Model.Hash);
         public void PlaceOnGround() => Function.Call(Hash.SET_VEHICLE_ON_GROUND_PROPERLY, Handle);
+
+        private static bool IsValidHandlingPtr(IntPtr p)
+        {
+            if ((ulong)p < 0x10000 || (ulong)p > 0x7FFFFFFFFFFF) return false;
+            float mass = *(float*)(p + 0x0C);
+            return mass >= 50f && mass <= 200000f;
+        }
+
         public HandlingData HandlingData
         {
             get
             {
                 IntPtr a = ModHost.GetEntityAddress(Handle);
-                if (a == IntPtr.Zero) return new HandlingData(IntPtr.Zero);
-                IntPtr p = *(IntPtr*)(a + 0x918);
-                if (p == IntPtr.Zero || (ulong)p < 0x10000) p = *(IntPtr*)(a + 0x960);
-                return new HandlingData(p);
+                if ((ulong)a < 0x10000) return new HandlingData(IntPtr.Zero);
+                IntPtr p = *(IntPtr*)(a + 0x960);
+                if (IsValidHandlingPtr(p)) return new HandlingData(p);
+                p = *(IntPtr*)(a + 0x958);
+                if (IsValidHandlingPtr(p)) return new HandlingData(p);
+                p = *(IntPtr*)(a + 0x938);
+                if (IsValidHandlingPtr(p)) return new HandlingData(p);
+                p = *(IntPtr*)(a + 0x918);
+                if (IsValidHandlingPtr(p)) return new HandlingData(p);
+                return new HandlingData(IntPtr.Zero);
             }
         }
     }
@@ -216,6 +239,7 @@ namespace GTA
     {
         private static bool _init = false;
         private static Script? _modInstance;
+        private static int _waitFrames = 0;
 
         private static delegate* unmanaged[Cdecl]<ulong, void> _nInit;
         private static delegate* unmanaged[Cdecl]<ulong, void> _nPush;
@@ -255,8 +279,6 @@ namespace GTA
             return res;
         }
 
-        private static int _waitFrames = 0;
-
         [UnmanagedCallersOnly(EntryPoint = "OnTick")]
         public static void OnTick()
         {
@@ -264,7 +286,6 @@ namespace GTA
             {
                 _waitFrames++;
                 if (_waitFrames < 200) return;
-
                 int ped = GTA.Native.Function.Call<int>(GTA.Native.Hash.PLAYER_PED_ID);
                 if (ped == 0) return;
 
@@ -275,14 +296,9 @@ namespace GTA
                     _modInstance = new LibertySuspensionMod();
                     File.AppendAllText("MiniDotNet_Mod.log", "[Mod] LibertySuspensionMod Started!\n");
                 }
-                catch (Exception ex)
-                {
-                    File.AppendAllText("MiniDotNet_Mod.log", $"[Mod Error] {ex}\n");
-                }
+                catch (Exception ex) { File.AppendAllText("MiniDotNet_Mod.log", $"[Mod Error] {ex}\n"); }
             }
-
             try { _modInstance?.OnTickInternal(); } catch { }
         }
     }
 }
-
