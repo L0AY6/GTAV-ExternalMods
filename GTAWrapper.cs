@@ -56,7 +56,7 @@ namespace GTA.Native
         public unsafe InputArgument(string val)
         {
             byte[] bytes = System.Text.Encoding.ASCII.GetBytes(val ?? "");
-            int len = Math.Min(bytes.Length, 510);
+                        int len = System.Math.Min(bytes.Length, 510);
             Marshal.Copy(bytes, 0, _strBuf, len);
             ((byte*)_strBuf)[len] = 0;
             Value = (ulong)_strBuf;
