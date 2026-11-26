@@ -46,7 +46,16 @@ namespace GTA.Native
 
     public class InputArgument
     {
-        private static readonly IntPtr _strBuf = Marshal.AllocHGlobal(512);
+        private static readonly IntPtr[] _strRing = InitRing();
+        private static int _ringIdx = 0;
+
+        private static IntPtr[] InitRing()
+        {
+            var arr = (IntPtr[])Array.CreateInstance(typeof(IntPtr), 64);
+            for (int i = 0; i < 64; i++) arr[i] = Marshal.AllocHGlobal(256);
+            return arr;
+        }
+
         public ulong Value { get; }
         public InputArgument(ulong val) { Value = val; }
         public InputArgument(int val) { Value = (ulong)val; }
@@ -55,11 +64,13 @@ namespace GTA.Native
         public unsafe InputArgument(float val) { Value = *(uint*)&val; }
         public unsafe InputArgument(string val)
         {
+            IntPtr buf = _strRing[_ringIdx];
+            _ringIdx = (_ringIdx + 1) & 63;
             byte[] bytes = System.Text.Encoding.ASCII.GetBytes(val ?? "");
-                        int len = System.Math.Min(bytes.Length, 510);
-            Marshal.Copy(bytes, 0, _strBuf, len);
-            ((byte*)_strBuf)[len] = 0;
-            Value = (ulong)_strBuf;
+            int len = System.Math.Min(bytes.Length, 254);
+            Marshal.Copy(bytes, 0, buf, len);
+            ((byte*)buf)[len] = 0;
+            Value = (ulong)buf;
         }
         public static implicit operator InputArgument(int v) => new InputArgument(v);
         public static implicit operator InputArgument(uint v) => new InputArgument(v);
