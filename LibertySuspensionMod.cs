@@ -593,4 +593,22 @@ public class LibertySuspensionMod : Script
     {
         try
         {
-            Vehicle[] veh
+            Vehicle[] vehicles = World.GetAllVehicles();
+            foreach (Vehicle v in vehicles)
+            {
+                if (v == null || !v.Exists()) continue;
+                int hash = v.Model.Hash;
+                Baseline b;
+                if (baselineByModelHash.TryGetValue(hash, out b))
+                {
+                    RestoreVehicleToBaseline(v, b);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("RestoreAllToVanilla error: " + ex.Message);
+        }
+    }
+}
+
