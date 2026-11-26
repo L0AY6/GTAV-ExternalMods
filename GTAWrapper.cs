@@ -255,15 +255,34 @@ namespace GTA
             return res;
         }
 
+        private static int _waitFrames = 0;
+
         [UnmanagedCallersOnly(EntryPoint = "OnTick")]
         public static void OnTick()
         {
             if (!_init)
             {
+                _waitFrames++;
+                if (_waitFrames < 200) return;
+
+                int ped = GTA.Native.Function.Call<int>(GTA.Native.Hash.PLAYER_PED_ID);
+                if (ped == 0) return;
+
                 _init = true;
-                try { _modInstance = new LibertySuspensionMod(); } catch { }
+                try
+                {
+                    File.AppendAllText("MiniDotNet_Mod.log", "[Mod] Initializing LibertySuspensionMod...\n");
+                    _modInstance = new LibertySuspensionMod();
+                    File.AppendAllText("MiniDotNet_Mod.log", "[Mod] LibertySuspensionMod Started!\n");
+                }
+                catch (Exception ex)
+                {
+                    File.AppendAllText("MiniDotNet_Mod.log", $"[Mod Error] {ex}\n");
+                }
             }
+
             try { _modInstance?.OnTickInternal(); } catch { }
         }
     }
 }
+
