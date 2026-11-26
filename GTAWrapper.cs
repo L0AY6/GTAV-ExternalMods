@@ -117,17 +117,18 @@ namespace GTA
     public enum VehicleClass { Compacts = 0, Sedans = 1, SUVs = 2, Coupes = 3, Muscle = 4, SportsClassics = 5, Sports = 6, Super = 7, Motorcycles = 8, OffRoad = 9, Industrial = 10, Utility = 11, Vans = 12, Cycles = 13, Boats = 14, Helicopters = 15, Planes = 16, Service = 17, Emergency = 18, Military = 19, Commercial = 20, Trains = 21 }
     public struct Model { public int Hash { get; } public Model(int hash) { Hash = hash; } }
 
-    public class HandlingParam
+        public class HandlingParam
     {
+        public string Name { get; set; }
         public string Label { get; set; }
         public float Value { get; set; }
-        public float DefaultValue { get; set; }
+        public float Default { get; set; }
         public float Min { get; set; }
         public float Max { get; set; }
         public float Step { get; set; }
         public HandlingParam(string label, float defVal, float min, float max, float step)
         {
-            Label = label; Value = defVal; DefaultValue = defVal; Min = min; Max = max; Step = step;
+            Name = label; Label = label; Value = defVal; Default = defVal; Min = min; Max = max; Step = step;
         }
     }
 
